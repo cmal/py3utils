@@ -214,3 +214,171 @@ class String(Descriptor):
 @MaxSized
 class SizedString(String):
     pass
+
+
+
+class B2:
+    """使用__getattr__的代理，代理方法比较多时候
+    __getattr__对于双下划线开始和结尾的方法是不能用的，需要一个个去重定义
+    """
+
+    def __init__(self):
+        self._a = A()
+
+    def bar(self):
+        pass
+
+    # Expose all of the methods defined on class A
+    def __getattr__(self, name):
+        """这个方法在访问的attribute不存在的时候被调用
+        the __getattr__() method is actually a fallback method
+        that only gets called when an attribute is not found"""
+        return getattr(self._a, name)
+
+
+
+
+
+# A proxy class that wraps around another object, but
+# exposes its public attributes
+class Proxy:
+    def __init__(self, obj):
+        self._obj = obj
+
+    # Delegate attribute lookup to internal obj
+    def __getattr__(self, name):
+        print('getattr:', name)
+        return getattr(self._obj, name)
+
+    # Delegate attribute assignment
+    def __setattr__(self, name, value):
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        else:
+            print('setattr:', name, value)
+            setattr(self._obj, name, value)
+
+    # Delegate attribute deletion
+    def __delattr__(self, name):
+        if name.startswith('_'):
+            super().__delattr__(name)
+        else:
+            print('delattr:', name)
+            delattr(self._obj, name)
+
+class Spam:
+    def __init__(self, x):
+        self.x = x
+
+    def bar(self, y):
+        print('Spam.bar:', self.x, y)
+
+
+# 实现多个 Contructor
+import time
+
+class Date:
+    """方法一：使用类方法"""
+    # Primary constructor
+    def __init__(self, year, month, day):
+        self.year = year
+        self.month = month
+        self.day = day
+
+    # Alternate constructor, 继承的子类也可以使用
+    @classmethod
+    def today(cls): # class 作为第一个参数(cls), 用法 c = Date.today()
+        t = time.localtime()
+        return cls(t.tm_year, t.tm_mon, t.tm_mday)
+
+
+# 绕过 __init__() 方法: __new__() 方法创建一个未初始化的实例
+# d = Date.__new__(Date)
+# 如: 1. 反序列化对象  2. 实现某个类方法构造函数 时
+
+
+def LoggedMapping(cls):
+    """使用类装饰器实现 Mixin """
+    cls_getitem = cls.__getitem__
+    cls_setitem = cls.__setitem__
+    cls_delitem = cls.__delitem__
+
+    def __getitem__(self, key):
+        print('Getting ' + str(key))
+        return cls_getitem(self, key)
+
+    def __setitem__(self, key, value):
+        print('Setting {} = {!r}'.format(key, value))
+        return cls_setitem(self, key, value)
+
+    def __delitem__(self, key):
+        print('Deleting ' + str(key))
+        return cls_delitem(self, key)
+
+    cls.__getitem__ = __getitem__
+    cls.__setitem__ = __setitem__
+    cls.__delitem__ = __delitem__
+    return cls
+
+
+@LoggedMapping
+class LoggedDict(dict):
+    pass
+
+
+# call method by name string
+import math
+
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return 'Point({!r:},{!r:})'.format(self.x, self.y)
+
+    def distance(self, x, y):
+        return math.hypot(self.x - x, self.y - y)
+
+
+p = Point(2, 3)
+d = getattr(p, 'distance')(0, 0)  # Calls p.distance(0, 0)
+
+# another method
+import operator
+operator.methodcaller('distance', 0, 0)(p)
+
+
+
+
+from functools import total_ordering
+# 在类定义上使用 @total_ordering
+# 只需定义一个 __eq__() 方法， 外加其他方法(__lt__, __le__, __gt__, or __ge__)中的一个即可。 然后装饰器会自动为你填充其它比较方法。
+
+
+# 缓存类实例
+class CachedSpamManager2:
+    def __init__(self):
+        self._cache = weakref.WeakValueDictionary()
+
+    def get_spam(self, name):
+        if name not in self._cache:
+            temp = Spam3._new(name)  # Modified creation
+            self._cache[name] = temp
+        else:
+            temp = self._cache[name]
+        return temp
+
+    def clear(self):
+            self._cache.clear()
+
+class Spam3:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError("Can't instantiate directly")
+
+    # Alternate constructor
+    @classmethod
+    def _new(cls, name):
+        self = cls.__new__(cls)
+        self.name = name
+        return self
